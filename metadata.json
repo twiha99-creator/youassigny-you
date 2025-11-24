@@ -1,0 +1,7 @@
+{
+  "name": "You Assign",
+  "description": "A comprehensive referee assignment management system for Soccer and Futsal, featuring AI-powered field location services, assignment tracking, and financial reporting.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
