@@ -1,59 +1,86 @@
+const API_BASE = "https://youassign-backend-2.onrender.com/api";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
-
-async function request(path: string, method = "GET", body?: any) {
-  const opts: RequestInit = {
-    method,
-    headers: { "Content-Type": "application/json" }
-  };
-
-  if (body) opts.body = JSON.stringify(body);
-
-  const res = await fetch(`${BASE_URL}${path}`, opts);
-
-  if (!res.ok) {
-    console.error("API ERROR", method, path, await res.text());
-    throw new Error(`API request failed: ${method} ${path}`);
-  }
-
-  return res.json().catch(() => null);
+// ---- USERS ----
+export async function getUsers() {
+  const res = await fetch(`${API_BASE}/users`);
+  return res.json();
 }
 
-export const backend = {
-  getUsers: () => request("/users"),
-  createUser: (user: any) => request("/users", "POST", user),
+export async function createUser(user: any) {
+  const res = await fetch(`${API_BASE}/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(user),
+  });
+  return res.json();
+}
 
-  authenticate: (email: string, pass: string) =>
-    request("/auth/login", "POST", { email, password: pass }),
+// ---- GROUPS ----
+export async function getGroups() {
+  const res = await fetch(`${API_BASE}/groups`);
+  return res.json();
+}
 
-  getGroups: () => request("/groups"),
+export async function createGroup(group: any) {
+  const res = await fetch(`${API_BASE}/groups`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(group),
+  });
+  return res.json();
+}
 
-  getGames: () => request("/games"),
+// ---- GAMES ----
+export async function getGames() {
+  const res = await fetch(`${API_BASE}/games`);
+  return res.json();
+}
 
-  saveGame: (game: any) => request(`/games/${game.id}`, "PUT", game),
+export async function createGame(game: any) {
+  const res = await fetch(`${API_BASE}/games`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(game),
+  });
+  return res.json();
+}
 
-  updateAssignmentStatus: (gameId: string, role: string, status: string) =>
-    request(`/games/${gameId}/assignment`, "POST", { role, status }),
+// ---- ASSIGNMENTS ----
+export async function getAssignments() {
+  const res = await fetch(`${API_BASE}/assignments`);
+  return res.json();
+}
 
-  markAssignmentAsPaid: (gameId: string, role: string) =>
-    request(`/games/${gameId}/paid`, "POST", { role }),
+export async function createAssignment(assignment: any) {
+  const res = await fetch(`${API_BASE}/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(assignment),
+  });
+  return res.json();
+}
 
-  getAvailabilities: () => request("/availability"),
+// ---- AVAILABILITY ----
+export async function getAvailability() {
+  const res = await fetch(`${API_BASE}/availability`);
+  return res.json();
+}
 
-  addAvailability: (avail: any) => request("/availability", "POST", avail),
+export async function setAvailability(data: any) {
+  const res = await fetch(`${API_BASE}/availability`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
 
-  deleteAvailability: (id: string) =>
-    request(`/availability/${id}`, "DELETE"),
-
-  sendNotification: (userId: string, message: string, type: string) =>
-    request("/notifications", "POST", { userId, message, type }),
-
-  sendManualNotification: (args: any) =>
-    request("/notifications/manual", "POST", args),
-
-  sendAdminUpcomingGamesReport: (adminId: string) =>
-    request(`/reports/upcoming/${adminId}`, "POST"),
-
-  triggerGameReminders: () =>
-    request(`/notifications/reminders`, "POST")
-};
+// ---- NOTIFICATIONS ----
+export async function sendNotification(data: any) {
+  const res = await fetch(`${API_BASE}/notifications`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
