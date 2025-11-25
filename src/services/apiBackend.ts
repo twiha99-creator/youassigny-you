@@ -1,86 +1,124 @@
-const API_BASE = "https://youassign-backend-2.onrender.com/api";
+// src/services/apiBackend.ts
+import axios from "axios";
 
-// ---- USERS ----
-export async function getUsers() {
-  const res = await fetch(`${API_BASE}/users`);
-  return res.json();
-}
+const API = axios.create({
+  baseURL: "https://youassign-backend-2.onrender.com/api",
+  headers: { "Content-Type": "application/json" }
+});
 
-export async function createUser(user: any) {
-  const res = await fetch(`${API_BASE}/users`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user),
-  });
-  return res.json();
-}
+// 🔐 Store JWT in memory
+let authToken: string | null = null;
 
-// ---- GROUPS ----
-export async function getGroups() {
-  const res = await fetch(`${API_BASE}/groups`);
-  return res.json();
-}
+export const backend = {
+  setToken(token: string | null) {
+    authToken = token;
+    if (token) {
+      API.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    } else {
+      delete API.defaults.headers.common["Authorization"];
+    }
+  },
 
-export async function createGroup(group: any) {
-  const res = await fetch(`${API_BASE}/groups`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(group),
-  });
-  return res.json();
-}
+  // ------------------------
+  // AUTHENTICATION
+  // ------------------------
+  async authenticate(email: string, password: string) {
+    const res = await API.post("/auth/login", { email, password });
+    return res.data; // { user, token }
+  },
 
-// ---- GAMES ----
-export async function getGames() {
-  const res = await fetch(`${API_BASE}/games`);
-  return res.json();
-}
+  async createUser(user: any) {
+    const res = await API.post("/users", user);
+    return res.data;
+  },
 
-export async function createGame(game: any) {
-  const res = await fetch(`${API_BASE}/games`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(game),
-  });
-  return res.json();
-}
+  // ------------------------
+  // USERS
+  // ------------------------
+  async getUsers() {
+    const res = await API.get("/users");
+    return res.data;
+  },
 
-// ---- ASSIGNMENTS ----
-export async function getAssignments() {
-  const res = await fetch(`${API_BASE}/assignments`);
-  return res.json();
-}
+  // ------------------------
+  // GROUPS
+  // ------------------------
+  async getGroups() {
+    const res = await API.get("/groups");
+    return res.data;
+  },
 
-export async function createAssignment(assignment: any) {
-  const res = await fetch(`${API_BASE}/assignments`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(assignment),
-  });
-  return res.json();
-}
+  // ------------------------
+  // GAMES
+  // ------------------------
+  async getGames() {
+    const res = await API.get("/games");
+    return res.data;
+  },
 
-// ---- AVAILABILITY ----
-export async function getAvailability() {
-  const res = await fetch(`${API_BASE}/availability`);
-  return res.json();
-}
+  async saveGame(game: any) {
+    return await API.put(`/games/${game.id}`, game);
+  },
 
-export async function setAvailability(data: any) {
-  const res = await fetch(`${API_BASE}/availability`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
-}
+  // ------------------------
+  // AVAILABILITY
+  // ------------------------
+  async getAvailabilities() {
+    const res = await API.get("/availability");
+    return res.data;
+  },
 
-// ---- NOTIFICATIONS ----
-export async function sendNotification(data: any) {
-  const res = await fetch(`${API_BASE}/notifications`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
-}
+  async addAvailability(avail: any) {
+    const res = await API.post("/availability", avail);
+    return res.data;
+  },
+
+  async deleteAvailability(id: string) {
+    await API.delete(`/availability/${id}`);
+  },
+
+  // ------------------------
+  // ASSIGNMENTS
+  // ------------------------
+  async updateAssignmentStatus(gameId: string, role: string, status: string) {
+    await API.put(`/assignments/${gameId}/${role}`, { status });
+  },
+
+  async markAssignmentAsPaid(gameId: string, role: string) {
+    await API.put(`/assignments/${gameId}/${role}/paid`);
+  },
+
+  // ------------------------
+  // NOTIFICATIONS
+  // ------------------------
+  async sendNotification(userId: string, message: string, type: "EMAIL" | "SMS") {
+    await API.post("/notifications", { userId, message, type });
+  },
+
+  async sendManualNotification(args: {
+    email: string;
+    phone: string;
+    subject: string;
+    message: string;
+  }) {
+    await API.post("/notifications/manual", args);
+  },
+
+  async sendAdminUpcomingGamesReport(adminId: string) {
+    await API.post("/notifications/admin-report", { adminId });
+  },
+
+  async triggerGameReminders() {
+    const res = await API.post("/notifications/reminders");
+    return res.data.count ?? 0;
+  },
+
+  // ------------------------
+  // BANK DETAILS
+  // ------------------------
+  async saveBankDetails(userId: string, details: any) {
+    await API.put(`/users/${userId}/bank`, details);
+  }
+};
+
+export default backend;
