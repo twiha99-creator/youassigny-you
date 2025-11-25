@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Game, Notification, Availability, BankDetails, Group, UserRole } from '../types';
-
-// ✅ IMPORTANT — use the REAL backend instead of mock backend
 import { backend } from '../services/apiBackend';
 
 interface AppContextType {
@@ -46,20 +44,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshData();
   }, []);
 
-  // Whenever currentUser changes, filter the view
+  // Reload filtered data when user changes
   useEffect(() => {
     if (currentUser) {
-       refreshData();
+      refreshData();
     } else {
-        setGames([]);
-        setUsers([]);
+      setGames([]);
+      setUsers([]);
     }
   }, [currentUser]);
 
   const refreshData = async () => {
     setIsLoading(true);
+
     const [allGames, allUsers, allAvail, allGroups] = await Promise.all([
-      backend.getGames(), 
+      backend.getGames(),
       backend.getUsers(),
       backend.getAvailabilities(),
       backend.getGroups()
@@ -68,66 +67,72 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setGroups(allGroups);
     setAvailabilities(allAvail);
 
-    // Logic: Filter based on currentUser permissions
     if (!currentUser) {
-        setGames([]);
-        setUsers([]);
+      setGames([]);
+      setUsers([]);
     } else if (currentUser.isSuperAdmin) {
-        setGames(allGames);
-        setUsers(allUsers);
+      setGames(allGames);
+      setUsers(allUsers);
     } else if (currentUser.role === 'ADMIN') {
-        setGames(allGames.filter(g => g.groupId === currentUser.groupId));
-        setUsers(allUsers.filter(u => u.groupId === currentUser.groupId || u.id === currentUser.id));
+      setGames(allGames.filter(g => g.groupId === currentUser.groupId));
+      setUsers(allUsers.filter(u => u.groupId === currentUser.groupId || u.id === currentUser.id));
     } else {
-        const myGames = allGames.filter(g => g.assignments?.some(a => a.userId === currentUser.id));
-        setGames(myGames);
-        setUsers([currentUser]);
+      const myGames = allGames.filter(g => g.assignments?.some(a => a.userId === currentUser.id));
+      setGames(myGames);
+      setUsers([currentUser]);
     }
+
     setIsLoading(false);
   };
 
   const login = (userId: string) => {
     backend.getUsers().then(latestUsers => {
-        const user = latestUsers.find(u => u.id === userId);
-        setCurrentUser(user || null);
+      const user = latestUsers.find(u => u.id === userId);
+      setCurrentUser(user || null);
     });
   };
 
   const authenticate = async (email: string, pass: string) => {
     setIsLoading(true);
-   const { user, token } = await backend.authenticate(email, pass);
 
-// Store token for API Authorization
-localStorage.setItem("token", token);
-backend.setToken(token);
+    const result = await backend.authenticate(email, pass);
+    // expects: { user, token }
 
-
-// Store token for API Authorization
-localStorage
-
-    if (user) {
-        setCurrentUser(user);
+    if (result?.token) {
+      localStorage.setItem("token", result.token);
+      backend.setToken(result.token);
     }
+
+    if (result?.user) {
+      setCurrentUser(result.user);
+    }
+
     setIsLoading(false);
-    return user;
+    return result?.user || null;
   };
 
-  const register = async (name: string, email: string, phone: string, role: UserRole, groupId?: string) => {
+  const register = async (name, email, phone, role, groupId) => {
     setIsLoading(true);
+
     const newUser = await backend.createUser({
-        id: '',
-        name,
-        email,
-        phone,
-        role,
-        groupId,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+      id: '',
+      name,
+      email,
+      phone,
+      role,
+      groupId,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
     });
+
     setCurrentUser(newUser);
     setIsLoading(false);
   };
 
-  const logout = () => setCurrentUser(null);
+  const logout = () => {
+    localStorage.removeItem("token");
+    backend.setToken(null);
+    setCurrentUser(null);
+  };
 
   const refreshGames = async () => {
     await refreshData();
@@ -141,119 +146,119 @@ localStorage
     setIsLoading(true);
 
     const oldGame = games.find(g => g.id === game.id);
-
     await backend.saveGame(game);
 
     game.assignments?.forEach(async (newAssign, index) => {
       const oldAssign = oldGame?.assignments?.[index];
-      const wasUnassigned = !oldAssign?.userId;
-      const isDifferentUser = oldAssign?.userId !== newAssign.userId;
+      const changed = oldAssign?.userId !== newAssign.userId;
 
-      if (newAssign.userId && (wasUnassigned || isDifferentUser) && newAssign.status === 'PENDING') {
-        const emailMsg = `You have been assigned to a new game!\n\nMatch: ${game.homeTeam} vs ${game.awayTeam}\nDate: ${game.date}\nTime: ${game.time}\nField: ${game.field}`;
-        await backend.sendNotification(newAssign.userId, emailMsg, 'EMAIL');
-
-        const smsMsg = `You Assign: New Game ${game.date} @ ${game.time}. ${game.homeTeam} vs ${game.awayTeam}. Log in to accept.`;
-        await backend.sendNotification(newAssign.userId, smsMsg, 'SMS');
+      if (newAssign.userId && changed && newAssign.status === 'PENDING') {
+        await backend.sendNotification(
+          newAssign.userId,
+          `You have been assigned a new game:\n${game.homeTeam} vs ${game.awayTeam}\n${game.date} @ ${game.time}`,
+          'EMAIL'
+        );
       }
     });
 
     await refreshGames();
   };
 
-  const createReferee = async (name: string, email: string, phone: string, groupId?: string) => {
-     if (!currentUser) return;
-     setIsLoading(true);
+  const createReferee = async (name, email, phone, groupId) => {
+    if (!currentUser) return;
+    setIsLoading(true);
 
-     const targetGroup = currentUser.isSuperAdmin ? groupId : currentUser.groupId;
+    const targetGroup = currentUser.isSuperAdmin ? groupId : currentUser.groupId;
 
-     const newRef: User = {
-         id: '',
-         name,
-         email,
-         phone,
-         role: 'REFEREE',
-         groupId: targetGroup,
-         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
-     };
+    const newRef: User = {
+      id: '',
+      name,
+      email,
+      phone,
+      role: 'REFEREE',
+      groupId: targetGroup,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+    };
 
-     await backend.createUser(newRef);
-     await refreshData();
-     setIsLoading(false);
-     triggerNotification(`Referee account created for ${name}`, 'EMAIL');
+    await backend.createUser(newRef);
+    await refreshData();
+    setIsLoading(false);
+
+    triggerNotification(`Referee created: ${name}`, 'EMAIL');
   };
 
-  const respondToAssignment = async (gameId: string, role: string, status: 'ACCEPTED' | 'DECLINED') => {
+  const respondToAssignment = async (gameId, role, status) => {
     setIsLoading(true);
     await backend.updateAssignmentStatus(gameId, role, status);
     await refreshGames();
   };
 
-  const markAsPaid = async (gameId: string, role: string) => {
+  const markAsPaid = async (gameId, role) => {
     setIsLoading(true);
     await backend.markAssignmentAsPaid(gameId, role);
     await refreshGames();
     setIsLoading(false);
   };
 
-  const updateBankDetails = async (details: { accountHolder: string, bankName: string, routingNumber: string, accountNumber: string }) => {
+  const updateBankDetails = async (details) => {
     if (!currentUser) return;
     setIsLoading(true);
 
     const bankDetails: BankDetails = {
-        accountHolder: details.accountHolder,
-        bankName: details.bankName,
-        routingNumber: details.routingNumber,
-        accountNumberMasked: `****${details.accountNumber.slice(-4)}`
+      accountHolder: details.accountHolder,
+      bankName: details.bankName,
+      routingNumber: details.routingNumber,
+      accountNumberMasked: `****${details.accountNumber.slice(-4)}`
     };
 
     await backend.saveBankDetails(currentUser.id, bankDetails);
     await refreshUsers();
-    triggerNotification("Direct Deposit information updated securely.", "EMAIL");
+    triggerNotification("Bank details updated.", "EMAIL");
     setIsLoading(false);
   };
 
-  const triggerNotification = (msg: string, type: 'EMAIL' | 'SMS') => {
-     const notif: Notification = {
-        id: Math.random().toString(),
-        userId: currentUser?.id || 'unknown',
-        message: msg,
-        type,
-        timestamp: Date.now(),
-        read: false
-     };
-     setNotifications(prev => [notif, ...prev]);
+  const triggerNotification = (msg, type) => {
+    const notif: Notification = {
+      id: Math.random().toString(),
+      userId: currentUser?.id || 'unknown',
+      message: msg,
+      type,
+      timestamp: Date.now(),
+      read: false
+    };
+
+    setNotifications(prev => [notif, ...prev]);
   };
 
   const sendAdminReport = async () => {
     if (!currentUser) return;
     setIsLoading(true);
+
     await backend.sendAdminUpcomingGamesReport(currentUser.id);
-    triggerNotification("Game Report sent to your email.", "EMAIL");
+    triggerNotification("Admin report sent.", "EMAIL");
+
     setIsLoading(false);
   };
 
   const triggerGameReminders = async () => {
     if (!currentUser) return 0;
     setIsLoading(true);
+
     const count = await backend.triggerGameReminders();
-    if (count > 0) {
-        triggerNotification(`Sent ${count} game reminders successfully.`, "EMAIL");
-    } else {
-        triggerNotification("No games found scheduled for tomorrow.", "SMS");
-    }
+    triggerNotification(`${count} reminders sent.`, "EMAIL");
+
     setIsLoading(false);
     return count;
   };
 
-  const sendManualNotification = async (args: { email: string, phone: string, subject: string, message: string }) => {
+  const sendManualNotification = async (args) => {
     setIsLoading(true);
     await backend.sendManualNotification(args);
-    triggerNotification(`Manual notification sent to ${args.email}`, 'EMAIL');
+    triggerNotification(`Manual notification sent to ${args.email}`, "EMAIL");
     setIsLoading(false);
   };
 
-  const addAvailability = async (avail: Omit<Availability, 'id'>) => {
+  const addAvailability = async (avail) => {
     setIsLoading(true);
     const newAvail: Availability = { ...avail, id: Date.now().toString() };
     await backend.addAvailability(newAvail);
@@ -269,11 +274,12 @@ localStorage
   };
 
   return (
-    <AppContext.Provider value={{ 
-      currentUser, games, users, groups, notifications, availabilities, isLoading, 
-      login, logout, authenticate, register, refreshGames, updateGame, respondToAssignment, triggerNotification,
-      addAvailability, deleteAvailability, markAsPaid, updateBankDetails, createReferee, sendAdminReport, triggerGameReminders,
-      sendManualNotification
+    <AppContext.Provider value={{
+      currentUser, games, users, groups, notifications, availabilities, isLoading,
+      login, logout, authenticate, register, refreshGames, updateGame,
+      respondToAssignment, triggerNotification, addAvailability,
+      deleteAvailability, markAsPaid, updateBankDetails, createReferee,
+      sendAdminReport, triggerGameReminders, sendManualNotification
     }}>
       {children}
     </AppContext.Provider>
