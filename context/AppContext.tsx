@@ -95,7 +95,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const authenticate = async (email: string, pass: string) => {
     setIsLoading(true);
-    const user = await backend.authenticate(email, pass);
+   const { user, token } = await backend.authenticate(email, pass);
+
+// Store token for API Authorization
+localStorage.setItem("token", token);
+backend.setToken(token);
+
+
+// Store token for API Authorization
+localStorage
+
     if (user) {
         setCurrentUser(user);
     }
